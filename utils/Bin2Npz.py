@@ -122,7 +122,7 @@ def npz_generator(bin_name, root_path="data/"):
             # x, y, p = decode_frame_normal_v2(block, WIDTH, HEIGHT)
             if x.size == 0:
                 continue
-            t = np.full_like(x, ts_us, dtype=np.float64) * 1e-6  # µs -> s
+            t = np.full_like(x, ts_us, dtype=np.float64)  # 使用ts_us填充到x形状的数组中
 
             events_t.append(t)
             events_x.append(x)

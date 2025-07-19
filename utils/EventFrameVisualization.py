@@ -1,6 +1,6 @@
 import numpy as np
-import os
 from pathlib import Path
+import os
 from PIL import Image
 
 
@@ -49,8 +49,6 @@ def npz_to_png(npz_path: Path, png_path: Path,
                     p = p[start:i]
                     break
                 last_time = now
-
-    total_time = t.max() - t.min()
 
     # 创建累积数组
     img = np.zeros((height, width), dtype=np.float32)
@@ -129,100 +127,6 @@ def analyze_pixel_distribution(img_array, name="图像"):
         print(f"  值 {val:3d}: {count:8d} 像素，占比 {ratio:6.2f}%")
 
 
-class EventFlowProcessor:
-    def __init__(self, npz_name, height, width, root_path="data/"):
-        if ".npz" in npz_name:
-            npz_name = npz_name.split(".")[0]
-        npz_path = Path(f"{root_path}{npz_name}.npz")
-
-        self.npz_name = npz_name
-        self.data = np.load(npz_path)
-        self.root_path = root_path
-        os.makedirs(root_path, exist_ok=True)
-        self.h = height
-        self.w = width
-
-    def make_event_frame_npzs(self, fps,
-                              delta: int = None,
-                              save_empty: bool = True, save_png: bool = False,
-                              polarity_map: dict = None
-                              ) -> None:
-        """
-
-        :param fps: 期望帧率
-        :param delta: 取事件帧时的窗口时间
-        :param save_empty:是否保存空事件帧
-        :param save_png:是否输出png
-        :param polarity_map:生成灰度图png时的像素值映射
-        :return:
-        """
-        t = self.data['t']
-        x = self.data['x'].astype(np.int64)
-        y = self.data['y'].astype(np.int64)
-        p = self.data['p']
-
-        total_event = np.unique(t).size
-        if fps > total_event:
-            raise ValueError(f"无法提供该帧率的输出，当前总的事件数量为：{total_event}")
-
-        root = f"{self.root_path}{self.npz_name}_event_frame"
-        os.makedirs(root, exist_ok=True)
-
-        npz_path = f"{root}/npz"
-        os.makedirs(npz_path, exist_ok=True)
-
-        png_path = f"{root}/png"
-        os.makedirs(png_path, exist_ok=True)
-
-        t0, tn = t.min(), t.max()
-        dt = 1e6 / fps  # µs per frame
-        if delta:
-            delta = max(dt, delta)
-
-        # 时间段划分：左闭右开 [start, end)
-        num_frames = int(np.ceil((t.max() - t0) / dt))
-        for i in range(num_frames):
-            t_end = t0 + (i + 1) * dt
-            t_start = t_end - (delta if delta else dt)
-
-            if t_end == tn:
-                mask = (t >= t_start) & (t <= t_end)
-            else:
-                mask = (t >= t_start) & (t < t_end)
-
-            if not np.any(mask) and not save_empty:
-                continue
-
-            sub = {
-                't': t[mask],
-                'x': x[mask],
-                'y': y[mask],
-                'p': p[mask],
-            }
-            np.savez_compressed(f"{npz_path}/{i:04d}.npz", **sub)
-
-            if save_png:
-                # 创建累积数组
-                img = np.zeros((self.h, self.w), dtype=np.float32)
-
-                if polarity_map is not None:
-                    # 用映射值填充
-                    for pol, grey in polarity_map.items():
-                        mask = (sub['p'] == pol)
-                        # if np.any(mask):
-                        coords = (sub['y'][mask], sub['x'][mask])
-                        img[coords] += grey
-                else:
-                    # 默认：每个事件都 +1
-                    coords = (sub['y'], sub['x'])
-                    np.add.at(img, coords, 255)
-
-                img = np.clip(img, 0, 255).astype(np.uint8)
-
-                # 保存
-                Image.fromarray(img).save(f"{png_path}/{i:04d}.png")
-
-
 if __name__ == "__main__":
     # 修改如下路径和参数
     get_frame = 0
@@ -230,20 +134,21 @@ if __name__ == "__main__":
     polarity_map = {1: 200, -1: 100}
     # polarity_map = None
 
-    # npz_file = Path("data/events_20250309170810117.npz")
-    # png_file = Path(f"data/events_20250309170810117_{get_frame}.png")
-    # WIDTH, HEIGHT = 816, 612  # 注意和你 parse 时的顺序一致！
-    # npz_to_png(npz_file, png_file, WIDTH, HEIGHT,
-    #            polarity_map=polarity_map, aim_frame=get_frame)
+    npz_file = Path("data/events_20250309170810117.npz")
+    png_file = Path(f"data/events_20250309170810117_{get_frame}.png")
+    WIDTH, HEIGHT = 816, 612  # 注意和你 parse 时的顺序一致！
+    npz_to_png(npz_file, png_file, WIDTH, HEIGHT,
+               polarity_map=polarity_map, aim_frame=get_frame)
+
     # png2 = Path("data/816_612_8_0000000000.png")  # 假设是官方软件导出的
     # diff_png = "data/diff.png"
     # compare_pngs(png_file, png2, diff_png, save_diff=False)
     #
-    npz_file = Path("data/2_3287761172100.npz")
-    png_file = Path(f"data/2_3287761172100_{get_frame}.png")
-    WIDTH, HEIGHT = 757, 602
-    npz_to_png(npz_file, png_file, WIDTH, HEIGHT, polarity_map=polarity_map, aim_frame=None)
-
-    WIDTH, HEIGHT = 757, 602
-    a = EventFlowProcessor(npz_name="2_3287761172100", height=HEIGHT, width=WIDTH,)
-    a.make_event_frame_npzs(1000, save_png=True)
+    # npz_file = Path("data/2_3287761172100.npz")
+    # png_file = Path(f"data/2_3287761172100_{get_frame}.png")
+    # WIDTH, HEIGHT = 757, 602
+    # npz_to_png(npz_file, png_file, WIDTH, HEIGHT, polarity_map=polarity_map, aim_frame=None)
+    #
+    # WIDTH, HEIGHT = 757, 602
+    # a = EventFlowProcessor(npz_name="2_3287761172100", height=HEIGHT, width=WIDTH)
+    # a.make_event_frame_npzs(1000, save_png=True)
